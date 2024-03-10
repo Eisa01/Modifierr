@@ -14,7 +14,7 @@ To create the rules of modifying an entry:
 In order for Modifierr to work, apply the following Settings in Overseerr.
 * In Overseerr > Settings > Notifications > Webhook
 * Tick `[✓] Enable Agent`
-* Add **Webhook URL**, for example, `192.168.1.5:5252/overseerr`
+* Add **Webhook URL**, for example, `127.0.0.1:5252/overseerr`
 * Default **JSON Payload** should work fine
 * Tick the below **Notification Types**, If you want Modifierr apply changes on both request types: 
      * `[✓] Request Pending Approval`
