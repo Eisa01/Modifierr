@@ -35,11 +35,11 @@ pip install -r requirements.txt
 * Navigate to the root folder of the repo
 * Run
 ```
-docker build -t Modifierr .
+docker build -t modifierr .
 ```
 * Run the docker container with the env file passed in
 ```
-docker run --env-file ./.env Modifierr
+docker run --env-file ./.env modifierr
 ```
 # Misc
 ### Special Thanks
