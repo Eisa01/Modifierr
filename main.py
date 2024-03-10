@@ -1,10 +1,15 @@
 import os
 import requests
 import time
+import logging
 from flask import Flask, request
 from waitress import serve
 from arrapi import SonarrAPI, RadarrAPI
 from dotenv import load_dotenv
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 #load the .env file to find any environment variables.
 load_dotenv()
@@ -17,7 +22,7 @@ def load_config_folders(instance_type):
     while True:
         config_folder = {}
         for key, value in os.environ.items():
-            prefix = f"{instance_type_lower}_FOLDER_{i}_"
+            prefix = f"{instance_type_lower}_CONFIG_{i}_"
             if key.startswith(prefix):
                 field_name = key.replace(prefix, "")
                 if '_M_' in field_name:
@@ -66,7 +71,7 @@ def process_request_overseerr(post_request_data):
     
     # Process Overseerr Webhook test and return
     if message_overseerr == 'Check check, 1, 2, 3. Are we coming in clear?':
-        return print('Overseerr Webhook test successful')
+        return logger.info('Overseerr Webhook test successful')
 
     # Prepare and get overseerr request data of tmdb
     response_tmdb_overseerr, response_tmdb_data_overseerr = get_tmdb_overseerr(post_request_data)
@@ -161,37 +166,54 @@ def modify_request_overseerr(post_request_data, response_data, config):
 
     # Start the logic for categorization
     put_data = None
+    match_failed = False #Flag to track if any match fails
 
     for folder_config in config:
-        folder_conditions = []
         # define initial parameters to use ids if names are not defined
         tags_ids = [int(tag.strip()) for tag in folder_config.get('M_ADD_TAGS_ID', '').split(',') if tag.strip()]
         profile_id = int(folder_config.get('PROFILE_ID')) if folder_config.get('PROFILE_ID') is not None else None
         tags_names = folder_config.get('M_ADD_TAGS_NAME', '')
-
         
         # Check if media type matches the folder configuration
         if folder_config.get('TYPE') == media_type:
             # Check if tmdb_genres condition exists for the folder configuration
-            if 'TMBD_GENRES' in folder_config:
-                for genre in folder_config['TMBD_GENRES']:
+            if 'M_TMDB_GENRES' in folder_config:
+                print('triggered: genre')
+                for genre in folder_config.get('M_TMDB_GENRES', '').split(','):
+                    if match_failed:  # Check if match has already failed
+                        break  # No need to continue if match has already failed to avoid resetting the flag
                     if genre.startswith('!'):
-                        if any(g['name'] == genre[1:] for g in response_data['genres']):
-                            break  # Exclude this folder_config if any excluded genre is found
+                        if any(g['name'].lower() == genre[1:].lower() for g in response_data['genres']):
+                            match_failed = True #Trigger match_failed if genre is not desired
+                            break #Break the loop if one match_failed
+                    elif any(g['name'].lower() == genre.lower() for g in response_data['genres']):
+                        match_failed = False #Proceed modification if genre is desired
+                        print(f'matched genre: {genre}')
                     else:
-                        folder_conditions.append(any(g['name'] == genre for g in response_data['genres']))
+                        match_failed = True
+                        print(f'failed genre: {genre}')
+                        break #Break the loop if one match_failed
 
             # Check if tmdb_keywords condition exists for the folder configuration
-            if 'TMDB_KEYWORDS' in folder_config:
-                for keyword in folder_config['TMDB_KEYWORDS']:
+            if 'M_TMDB_KEYWORDS' in folder_config:
+                print('triggered: keyword')
+                for keyword in folder_config.get('M_TMDB_KEYWORDS', '').split(','):
+                    if match_failed:  # Check if match has already failed
+                        break  # No need to continue if match has already failed to avoid resetting the flag
                     if keyword.startswith('!'):
-                        if any(k['name'] == keyword[1:] for k in response_data['keywords']):
-                            break  # Exclude this folder_config if any excluded keyword is found
+                        if any(k['name'].lower() == keyword[1:].lower() for k in response_data['keywords']):
+                            match_failed = True #Trigger match_failed if keyword is not desired
+                            break #Break the loop if one match_failed
+                    elif any(k['name'].lower() == keyword.lower() for k in response_data['keywords']):
+                        match_failed = False #Proceed modification if keyword is desired
+                        print(f'matched keyword: {keyword}')
                     else:
-                        folder_conditions.append(any(k['name'] == keyword for k in response_data['keywords']))
+                        match_failed = True
+                        print(f'failed keyword: {keyword}')
+                        break #Break the loop if one match_failed
 
-            # Check if all folder conditions are satisfied
-            if all(folder_conditions):
+            # Check if all conditions are satisfied
+            if not match_failed:
                 if media_type == 'movie':
                     # Find the ids based on tags_name if it is configured
                     if tags_names:
@@ -251,15 +273,18 @@ def submit_modifications_overseerr(put_data, response_data, request_id):
         response = requests.put(put_url, headers=headers, json=put_data)
         modified_root_folder = put_data.get('rootFolder', '')
         title = response_data.get('title', response_data.get('name', ''))
-        print(f"{title}\nRoot Folder: {modified_root_folder}")
+        logger.info(f"{title}\nRoot Folder: {modified_root_folder}")
         if response.status_code != 200:
             raise Exception(f'Error updating request status: {response.content}')
         else:
-            print("Success! Overseerr request updated")
+            logger.info("Success! Overseerr request updated")
     else:
-        print("No changes to submit")
+        logger.info("No changes to submit")
 
 def submit_modifications_overseerr_sonarr_radarr(put_data, request_data):
+    # Exit the function if there is no put_data created no modifications needed
+    if not put_data:
+        return
     # Extract the needed data from the request_data
     data_overseerr = extract_request_data_overseerr(request_data)
     notification_type_overseerr = data_overseerr['notification_type']
@@ -341,14 +366,13 @@ def custom_function_interval_retry(parent_function, child_function=None, first_i
                 child_function(parent_function_output)    # Run the child function, if defined
             return parent_function_output # return the parent_
         except Exception as e:
-            print(f"Error: {e}. Retrying in {retry_interval} seconds...")
+            logger.info(f"Error: {e}. Retrying in {retry_interval} seconds...")
             delay(retry_interval)
             retries += 1
-    print("Max retries reached, function failed.")
+    logger.info("Max retries reached, function failed.")
 
 if __name__ == '__main__':
     listen_addr = os.getenv("WEBSERVER_LISTEN_ADDR", "0.0.0.0:5252")
     host, port = listen_addr.split(':')
     protocol = "https" if port == "443" else "http"
-    print(f"Listening on {protocol}://{host}:{port}")    
     serve(app, host=host, port=port)
