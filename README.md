@@ -7,9 +7,12 @@ Modifierr (currently) works by receving a get request from Overseerr.
 ### Modify Entries Based on Config
 To create the rules of modifying an entry:
 * Modify the `.env` file and input your instances `APIKEY` and `BASEURL`.
-* Create as many `FOLDER_0`, `FOLDER_1` configurations needed, all with their own configurations.
-* The tool will try to match any entry you add with the `M_TMDB` found in the added entry.
-* Then it will apply the changes created for `_FOLDER_#,` , e.g.: `PATH` you set, or the `PROFILE`, or the `TAGS`.
+* Create as many `CONFIG_0`, `CONFIG_1` configurations needed, all with their own configurations.
+* The tool will try to match any entry you add with the `M_TMDB` preset you defined.
+     * Example: `OVERSEERR_CONFIG_0_M_TMBD_GENRES=animation,action` 
+* Or you can do exclusion by adding `!` before your config. Below is sample for animation that is not action.
+     * Example: `OVERSEERR_CONFIG_0_M_TMBD_GENRES=animation,!action`
+* Then it will apply the changes created for `OVERSEERR_CONFIG_#_M_TMDB_GENRES,` , e.g.: `PATH` you set, or the `PROFILE`, or the `TAGS`.
 ### Overseerr Settings
 In order for Modifierr to work, apply the following Settings in Overseerr.
 * In Overseerr > Settings > Notifications > Webhook
